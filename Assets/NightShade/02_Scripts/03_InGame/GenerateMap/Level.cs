@@ -18,6 +18,7 @@ public static class Level
     public static Sprite ShopRoomIcon = null;       // 상점 방 아이콘
     public static Sprite CurrentRoomIcon = null;    // 플레이어가 위치한 방 아이콘
     public static Sprite UnExploredRoomIcon = null; // 플레이어가 도달하지 못한 방 아이콘
+    public static Sprite SecretRoomIcon = null;     // 비밀의 방 아이콘
 
     public static List<Room> Rooms = new List<Room>();  // 생성된 방을 모아두는 리스트
     public static Room CurrentRoom;                     // 생성된 방 중 플레이어가 위치한 방

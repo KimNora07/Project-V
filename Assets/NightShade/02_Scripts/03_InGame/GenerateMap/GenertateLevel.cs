@@ -1,6 +1,8 @@
 //System
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
+
 
 //UnityEngine
 using UnityEngine;
@@ -8,14 +10,23 @@ using UnityEngine.UI;
 
 public class GenertateLevel : MonoBehaviour
 {
+    // 방 번호
+    // 시작방 : 0
+    // 보스방 : 1
+    // 상점방 : 2
+    // 보물방 : 3
+    // 비밀방 : 4
+
     public Sprite emptyRoom;    // 기본적인 방 이미지
     public Sprite currentRoom;  // 플레이어가 위치한 방 이미지
-    public Sprite unExplored;   // 플레이어가 도달하지 않은 방 이미지
+    public Sprite unExploredRoom;   // 플레이어가 도달하지 않은 방 이미지
     public Sprite bossRoom;     // 보스 방 이미지
     public Sprite shopRoom;     // 상점 방 이미지
     public Sprite treasureRoom; // 보물방 방 이미지
+    public Sprite secretRoom;
 
     private int failSafe = 0;   // 방 생성 실패 방지를 위함
+    private int maxtries = 0;
     private bool reGenerating = false;
 
     private void Awake()
@@ -29,6 +40,7 @@ public class GenertateLevel : MonoBehaviour
         Room startRoom = new Room();
         startRoom.Location = new Vector2(0, 0);
         startRoom.RoomImage = Level.CurrentRoomIcon;
+        startRoom.RoomNumber = 0;
 
         // 방을 생성
         Generate(startRoom);
@@ -37,20 +49,23 @@ public class GenertateLevel : MonoBehaviour
     private void Update()
     {
         // Tab을 눌렀을 때 방을 초기화 시키고 다시 생성
-        if(Input.GetKeyDown(KeyCode.Tab) && !reGenerating)
+        if(Input.GetKey(KeyCode.Tab) && !reGenerating)
+        {
+            Regenerate();
+        }
+
+        if (Input.GetKey(KeyCode.P) && !reGenerating)
         {
             reGenerating = true;
             Invoke(nameof(StopRegenerating), 1);
 
-            for(int i = transform.childCount - 1; i >= 0; i--)
+            string log = "Room List:\n--------------------\n";
+
+            foreach(Room room in Level.Rooms)
             {
-                Transform child = transform.GetChild(i);
-                Destroy(child.gameObject);
+                Debug.Log("Room#:" +  room.RoomNumber + " Location: " + room.Location);
             }
-
-            Level.Rooms.Clear();
-
-            Start();
+            Debug.Log(log);
         }
     }
 
@@ -61,10 +76,11 @@ public class GenertateLevel : MonoBehaviour
     {
         Level.DefaultRoomIcon = emptyRoom;
         Level.CurrentRoomIcon = currentRoom;
-        Level.UnExploredRoomIcon = unExplored;
+        Level.UnExploredRoomIcon = unExploredRoom;
         Level.BossRoomIcon = bossRoom;
         Level.ShopRoomIcon = shopRoom;
         Level.TreasureRoonIcon = treasureRoom;
+        Level.SecretRoomIcon = secretRoom;
     }
 
     /// <summary>
@@ -73,8 +89,17 @@ public class GenertateLevel : MonoBehaviour
     /// <param name="room">방</param>
     private void DrawRoomOnMap(Room room)
     {
+        string tileName = "MapTile";
+
+        switch (room.RoomNumber)
+        {
+            case 1: tileName = "BossRoomTile"; break;
+            case 2: tileName = "ShopRoomTile"; break;
+            case 3: tileName = "TreasureRoomTile"; break;
+        }
+
         // 오브젝트를 생성
-        GameObject mapTile = new GameObject("MapTile");     
+        GameObject mapTile = new GameObject(tileName);     
         
         // 이미지 컴포넌트를 넣는다
         Image roomImage = mapTile.AddComponent<Image>();
@@ -85,6 +110,7 @@ public class GenertateLevel : MonoBehaviour
         roomImage.transform.SetParent(transform, false);
 
         Level.Rooms.Add(room);
+        Debug.Log("Drawing Room:" + room.RoomNumber + " at Location " + room.Location);
     }
 
     /// <summary>
@@ -179,6 +205,7 @@ public class GenertateLevel : MonoBehaviour
             Room newRoom = new Room();
             newRoom.Location = new Vector2(-1, 0) + room.Location;
             newRoom.RoomImage = Level.DefaultRoomIcon;
+            newRoom.RoomNumber = GetRandomRoomNumber();
 
             if (!CheckIfRoomExists(newRoom.Location))
             {
@@ -198,6 +225,7 @@ public class GenertateLevel : MonoBehaviour
             Room newRoom = new Room();
             newRoom.Location = new Vector2(1, 0) + room.Location;
             newRoom.RoomImage = Level.DefaultRoomIcon;
+            newRoom.RoomNumber = GetRandomRoomNumber();
 
             if (!CheckIfRoomExists(newRoom.Location))
             {
@@ -217,6 +245,7 @@ public class GenertateLevel : MonoBehaviour
             Room newRoom = new Room();
             newRoom.Location = new Vector2(0, 1) + room.Location;
             newRoom.RoomImage = Level.DefaultRoomIcon;
+            newRoom.RoomNumber = GetRandomRoomNumber();
 
             if (!CheckIfRoomExists(newRoom.Location))
             {
@@ -236,6 +265,7 @@ public class GenertateLevel : MonoBehaviour
             Room newRoom = new Room();
             newRoom.Location = new Vector2(0, -1) + room.Location;
             newRoom.RoomImage = Level.DefaultRoomIcon;
+            newRoom.RoomNumber = GetRandomRoomNumber();
 
             if (!CheckIfRoomExists(newRoom.Location))
             {
@@ -250,6 +280,14 @@ public class GenertateLevel : MonoBehaviour
         }
 
         GenerateBossRoom();
+        bool isShop = GenerateSpecialRoom(Level.ShopRoomIcon, 2);
+        bool isTreasure = GenerateSpecialRoom(Level.TreasureRoonIcon, 3);
+        bool isSecret = GenerateSpecialRoom(Level.SecretRoomIcon, 4);
+
+        if (!isShop || !isTreasure || !isSecret)
+        {
+            Regenerate();
+        }
     }
 
     /// <summary>
@@ -280,38 +318,159 @@ public class GenertateLevel : MonoBehaviour
 
         Room bossRoom = new Room();
         bossRoom.RoomImage = Level.BossRoomIcon;
-        bossRoom.RoomNumber = 3;
+        bossRoom.RoomNumber = 1;
 
         // 왼쪽
-        if (!CheckIfRoomExists(fathestRoom))
+        if (!CheckIfRoomExists(fathestRoom + new Vector2(-1, 0)))
+        {
             if (!CheckIfRoomsAroundGeneratedRoom(fathestRoom + new Vector2(-1, 0), "Right"))
             {
                 bossRoom.Location = fathestRoom + new Vector2(-1, 0);
             }
+        }
+
 
         // 오른쪽
-        else if (!CheckIfRoomExists(fathestRoom))
+        else if (!CheckIfRoomExists(fathestRoom + new Vector2(1, 0)))
+        {
             if (!CheckIfRoomsAroundGeneratedRoom(fathestRoom + new Vector2(1, 0), "Left"))
             {
                 bossRoom.Location = fathestRoom + new Vector2(1, 0);
             }
+        }
 
         // 위쪽
-        else if (!CheckIfRoomExists(fathestRoom))
+        else if (!CheckIfRoomExists(fathestRoom + new Vector2(0, 1)))
+        {
             if (!CheckIfRoomsAroundGeneratedRoom(fathestRoom + new Vector2(0, 1), "Down"))
             {
                 bossRoom.Location = fathestRoom + new Vector2(0, 1);
             }
+        }
 
         // 아래쪽
-        else if (!CheckIfRoomExists(fathestRoom))
+        else if (!CheckIfRoomExists(fathestRoom + new Vector2(0, -1)))
+        {
             if (!CheckIfRoomsAroundGeneratedRoom(fathestRoom + new Vector2(0, -1), "Up"))
             {
                 bossRoom.Location = fathestRoom + new Vector2(0, -1);
             }
+        }
 
         DrawRoomOnMap(bossRoom);
 
     }
     #endregion
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    private int GetRandomRoomNumber()
+    {
+        return 6;
+    }
+
+    private bool GenerateSpecialRoom(Sprite mapIcon, int roomNumber)
+    {
+        List<Room> shuffledList = new List<Room>(Level.Rooms);
+
+        Room specialRoom = new Room();
+        specialRoom.RoomImage = mapIcon;
+        specialRoom.RoomNumber = roomNumber;
+
+        bool foundAvailableLocation = false;
+
+        foreach (Room room in shuffledList)
+        {
+            Vector2 specialRoomLocation = room.Location;
+
+            if (room.RoomNumber < 6) continue;
+
+            // 왼쪽
+            if (!CheckIfRoomExists(specialRoomLocation + new Vector2(-1, 0)))
+            {
+                if (!CheckIfRoomsAroundGeneratedRoom(specialRoomLocation + new Vector2(-1, 0), "Right"))
+                {
+                    specialRoom.Location = specialRoomLocation + new Vector2(-1, 0);
+                    foundAvailableLocation = true;
+                }
+            }
+
+            // 오른쪽
+            else if (!CheckIfRoomExists(specialRoomLocation + new Vector2(1, 0)))
+            {
+                if (!CheckIfRoomsAroundGeneratedRoom(specialRoomLocation + new Vector2(1, 0), "Left"))
+                {
+                    specialRoom.Location = specialRoomLocation + new Vector2(1, 0);
+                    foundAvailableLocation = true;
+                }
+            }
+
+            // 위쪽
+            else if (!CheckIfRoomExists(specialRoomLocation + new Vector2(0, 1)))
+            {
+                if (!CheckIfRoomsAroundGeneratedRoom(specialRoomLocation + new Vector2(0, 1), "Down"))
+                {
+                    specialRoom.Location = specialRoomLocation + new Vector2(0, 1);
+                    foundAvailableLocation = true;
+                }
+            }
+
+            // 아래쪽
+            else if (!CheckIfRoomExists(specialRoomLocation + new Vector2(0, -1)))
+            {
+                if (!CheckIfRoomsAroundGeneratedRoom(specialRoomLocation + new Vector2(0, -1), "Up"))
+                {
+                    specialRoom.Location = specialRoomLocation + new Vector2(0, -1);
+                    foundAvailableLocation = true;
+                }
+            }
+
+            if (foundAvailableLocation)
+            {
+                DrawRoomOnMap(specialRoom);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Fisher Yates Shuffle 알고리즘
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="list"></param>
+    private void ShuffleList<T>(List<T> list)
+    {
+        int number = list.Count;
+        System.Random rand = new System.Random();
+
+        while(number > 1)
+        {
+            number--;
+
+            int k = rand.Next(number + 1);
+            T value = list[k];
+            list[k] = list[number];
+            list[number] = value;
+        }
+    }
+
+    private void Regenerate()
+    {
+        reGenerating = true;
+        failSafe = 0;
+        Level.Rooms.Clear();
+        Invoke(nameof(StopRegenerating), 1);
+
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            Transform child = transform.GetChild(i);
+            Destroy(child.gameObject);
+        }
+
+        Start();
+    }
 }
